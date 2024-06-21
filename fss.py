@@ -33,12 +33,13 @@ def main():
         s = input("> ")
         if s == "exit":
             break
-        print(s)
+
         s_l = len(s)
         if s_l > 256:
             print("Sentence too long! Cutting it back to 256 characters long.")
             s_l = 256
             s = s[0:256]
+        
         try:
             pkt = Ether(dst="00:04:00:00:00:00", type=0x1234) / FSS(
                                               first_find_pos=0,
@@ -50,6 +51,8 @@ def main():
 
             pkt.show()
             resp = srp1(pkt, iface=iface, timeout=10, verbose=True)
+            resp.show()
+
             if resp:
                 fssres=resp[FSS]
                 if fssres:
@@ -58,6 +61,7 @@ def main():
                     print("Can't find FSS header!")
             else:
                 print("No response!")
+
         except Exception as error:
             print(error)
 
