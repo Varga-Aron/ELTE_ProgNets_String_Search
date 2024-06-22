@@ -227,6 +227,11 @@ control MyIngress(inout headers hdr,
                     if (hdr.fss.sentence[2047:2040] == char_d) {
                         hdr.loop.state = 0;
                         hdr.fss.find_count = hdr.fss.find_count + 1;
+
+                        if (hdr.fss.first_find_pos == 0) {
+                            hdr.fss.first_find_pos = hdr.loop.current_pos - 3;
+                        }
+
                     } else {
                         hdr.loop.state = 0;
                     }

@@ -7,8 +7,6 @@ from scapy.all import (
     IntField,
     Packet,
     StrFixedLenField,
-    StrField,
-    XByteField,
     bind_layers,
     srp1
 )
@@ -23,6 +21,7 @@ class FSS(Packet):
                 ]
 
 bind_layers(Ether, FSS, type=0x1234)
+
 
 def main():
 
@@ -56,7 +55,7 @@ def main():
             if resp:
                 fssres=resp[FSS]
                 if fssres:
-                    print(str(fssres.sentence))
+                    print(s[fssres.first_find_pos:fssres.first_find_pos + 4])
                 else:
                     print("Can't find FSS header!")
             else:
