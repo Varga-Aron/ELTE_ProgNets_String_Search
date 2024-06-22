@@ -99,24 +99,6 @@ control MyVerifyChecksum(inout headers hdr,
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
-    
-    bit<8> current_char = hdr.fss.sentence[7:0];
-
-    action state_zero() {
-        hdr.loop.state = 1;
-    }
-    action state_one() {
-        hdr.loop.state = 2;
-    }
-    action state_two() {
-        hdr.loop.state = 3;
-    }
-    action state_three() {
-        hdr.loop.state = 0;
-    }
-    action state_default() {
-        hdr.loop.state = 0;
-    }
 
     /*
      * This P4 program simulates a for loop using recirculation, in order to search for 
@@ -139,6 +121,12 @@ control MyIngress(inout headers hdr,
      * |  All other configurations will set the State to 0   |
      * +-----------------+-----------------+-----------------+
      */
+    action state_zero()    { /* empty by design */ }
+    action state_one()     { /* empty by design */ }
+    action state_two()     { /* empty by design */ }
+    action state_three()   { /* empty by design */ }
+    action state_default() { /* empty by design */ }
+
     table state_change {
         key = {
             hdr.loop.state : exact;
@@ -207,7 +195,47 @@ control MyIngress(inout headers hdr,
         }
 
         if (hdr.loop.current_pos < hdr.fss.length) {
-            state_change.apply();
+
+            /*
+             * This is the code of the main cycle of the loop.
+             *     This part is kept this ugly, because the logging
+             *     does not work properly, if these are separated into their own actions
+             */
+            switch (state_change.apply().action_run) {
+                state_zero: {
+                    if (hdr.fss.sentence[2047:2040] == char_w) {
+                        hdr.loop.state = 1;
+                    } else {
+                        hdr.loop.state = 0;
+                    }
+                }
+                state_one: {
+                    if (hdr.fss.sentence[2047:2040] == char_o) {
+                        hdr.loop.state = 2;
+                    } else {
+                        hdr.loop.state = 0;
+                    }
+                }
+                state_two: {
+                    if (hdr.fss.sentence[2047:2040] == char_r) {
+                        hdr.loop.state = 3;
+                    } else {
+                        hdr.loop.state = 0;
+                    }
+                }
+                state_three: {
+                    if (hdr.fss.sentence[2047:2040] == char_d) {
+                        hdr.loop.state = 0;
+                        hdr.fss.find_count = hdr.fss.find_count + 1;
+                    } else {
+                        hdr.loop.state = 0;
+                    }
+                }
+                state_default: { 
+                    hdr.loop.state = 0;
+                }
+            }
+
         } else {
             loop_end();
         }
