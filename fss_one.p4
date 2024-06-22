@@ -163,6 +163,7 @@ control MyIngress(inout headers hdr,
         /* swap mac addresses */
         swapMac();
 
+        hdr.fss.first_find_pos = 2048;
         hdr.loop.setValid();
         hdr.loop.current_pos = 0;
         hdr.loop.state = 0;
@@ -228,7 +229,7 @@ control MyIngress(inout headers hdr,
                         hdr.loop.state = 0;
                         hdr.fss.find_count = hdr.fss.find_count + 1;
 
-                        if (hdr.fss.first_find_pos == 0) {
+                        if (hdr.fss.first_find_pos == 2048) {
                             hdr.fss.first_find_pos = hdr.loop.current_pos - 3;
                         }
 
