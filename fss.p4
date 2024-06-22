@@ -4,23 +4,24 @@
 #include <v1model.p4>
 
 /*
- * Define the headers the program will recognize
+ * Define the types the program will recognize
  */
 
+ // Mac address type
  typedef bit<48> macAddr_t;
 
 /*
- * Standard Ethernet header
+ * Define the headers the program will recognize
  */
+
+// Standard Ethernet header
 header ethernet_t {
     bit<48> dstAddr;
     bit<48> srcAddr;
     bit<16> etherType;
 }
 
-/*
- * FSS header
- */
+// FSS header
 header fss_t {
     bit<32> first_find_pos;
     bit<32> find_count;
@@ -28,9 +29,7 @@ header fss_t {
     bit<2048> sentence;
 }
 
-/*
- * Header for the looping
- */
+// Header for the looping
 header loop_t {
     bit<32> current_pos;
     bit<32> state;
@@ -50,12 +49,11 @@ struct headers {
 }
 
 /*
- * All metadata, globally used in the program, also  needs to be assembled
+ * All metadata, globally used in the program, also needs to be assembled
  * into a single struct. As in the case of the headers, we only need to
  * declare the type, but there is no need to instantiate it,
  * because it is done "by the architecture", i.e. outside of P4 functions
  */
-
 struct metadata {
     /* In our case it is empty */
 }
@@ -98,8 +96,6 @@ control MyIngress(inout headers hdr,
     }
 
     apply {
-        /* set output port */
-        // standard_metadata.egress_spec = standard_metadata.ingress_port;
 
         if (hdr.loop.isValid()) {
             hdr.loop.current_pos = hdr.loop.current_pos + 1;
