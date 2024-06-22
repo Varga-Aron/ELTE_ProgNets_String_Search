@@ -9,6 +9,17 @@
 
  // Mac address type
  typedef bit<48> macAddr_t;
+ typedef bit<32> int_32;
+
+
+/*
+ * Define the constants the program will use
+ */
+const bit<8> char_w = 0x77;   // 'w'
+const bit<8> char_o = 0x6f;   // 'o'
+const bit<8> char_r = 0x72;   // 'r'
+const bit<8> char_d = 0x64;   // 'd'
+
 
 /*
  * Define the headers the program will recognize
@@ -23,16 +34,16 @@ header ethernet_t {
 
 // FSS header
 header fss_t {
-    bit<32> first_find_pos;
-    bit<32> find_count;
-    bit<32> length;
+    int_32 first_find_pos;
+    int_32 find_count;
+    int_32 length;
     bit<2048> sentence;
 }
 
 // Header for the looping
 header loop_t {
-    bit<32> current_pos;
-    bit<32> state;
+    int_32 current_pos;
+    int_32 state;
     bit<9> origin_port;
     bit<7> padding;
 }
@@ -88,32 +99,117 @@ control MyVerifyChecksum(inout headers hdr,
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
+    
+    bit<8> current_char = hdr.fss.sentence[7:0];
 
+    action state_zero() {
+        hdr.loop.state = 1;
+    }
+    action state_one() {
+        hdr.loop.state = 2;
+    }
+    action state_two() {
+        hdr.loop.state = 3;
+    }
+    action state_three() {
+        hdr.loop.state = 0;
+    }
+    action state_default() {
+        hdr.loop.state = 0;
+    }
+
+    /*
+     * This P4 program simulates a for loop using recirculation, in order to search for 
+     *     a predefined word.
+     *
+     * This table implements the code for the main cycle of the loop.
+     *
+     * The phrase that the P4 program will search for is 'word'
+     *
+     *        State             Char          To What State
+     * +-----------------+-----------------+-----------------+
+     * |        0        |        w        |        1        |
+     * +-----------------+-----------------+-----------------+
+     * |        1        |        o        |        2        |
+     * +-----------------+-----------------+-----------------+
+     * |        2        |        r        |        3        |
+     * +-----------------+-----------------+-----------------+
+     * |        3        |        d        |        0        |
+     * +-----------------+-----------------+-----------------+
+     * |  All other configurations will set the State to 0   |
+     * +-----------------+-----------------+-----------------+
+     */
+    table state_change {
+        key = {
+            hdr.loop.state : exact;
+        }
+        actions = {
+            state_zero;
+            state_one;
+            state_two;
+            state_three;
+            state_default;
+        }
+        const entries = {
+            0 : state_zero;
+            1 : state_one;
+            2 : state_two;
+            3 : state_three;
+        }
+        const default_action = state_default;
+    }
+
+    /*
+     * Method to swap the source and destination Mac Addresses.
+     */
     action swapMac() {
         macAddr_t tmp = hdr.ethernet.srcAddr;
         hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
         hdr.ethernet.dstAddr = tmp;
     }
 
+    /*
+     * Method that is executed once before the loop's first cycle.
+     */
+    action loop_initialize() {
+        /* swap mac addresses */
+        swapMac();
+
+        hdr.loop.setValid();
+        hdr.loop.current_pos = 0;
+        hdr.loop.state = 0;
+        hdr.loop.origin_port = standard_metadata.ingress_port;
+    }
+
+    /*
+     * Method that is executed before each of the loop's cycles, except the first one.
+     */
+    action loop_increment() {
+        hdr.loop.current_pos = hdr.loop.current_pos + 1;
+        hdr.fss.sentence = hdr.fss.sentence << 8;
+    }
+
+    /*
+     * Method that is executed once during the loop's last cycle.
+     */
+    action loop_end() {
+        standard_metadata.egress_spec = hdr.loop.origin_port;
+    }
+
+    /*
+     * The main body of the Ingress Processing
+     */
     apply {
-
         if (hdr.loop.isValid()) {
-            hdr.loop.current_pos = hdr.loop.current_pos + 1;
-            hdr.loop.state = 1;
+            loop_increment();
         } else {
-            /* swap mac addresses */
-            swapMac();
-
-            hdr.loop.setValid();
-            hdr.loop.current_pos = 0;
-            hdr.loop.state = 0;
-            hdr.loop.origin_port = standard_metadata.ingress_port;
+            loop_initialize();
         }
 
         if (hdr.loop.current_pos < hdr.fss.length) {
-            
+            state_change.apply();
         } else {
-            standard_metadata.egress_spec = hdr.loop.origin_port;
+            loop_end();
         }
     }
 }
@@ -125,6 +221,7 @@ control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
     apply {
+        // If the loop is still going, then recirculate the packet
         if (hdr.loop.current_pos < hdr.fss.length) {
             recirculate_preserving_field_list(0);
         }
